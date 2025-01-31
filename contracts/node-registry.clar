@@ -5,6 +5,7 @@
 (define-constant err-not-owner (err u100))
 (define-constant err-already-registered (err u101))
 (define-constant err-not-registered (err u102))
+(define-constant err-invalid-reputation (err u103))
 
 ;; Data vars
 (define-map nodes 
@@ -14,7 +15,8 @@
     location: (string-ascii 2),
     reputation: uint,
     total-shared: uint,
-    is-active: bool
+    is-active: bool,
+    last-updated: uint
   }
 )
 
@@ -30,7 +32,8 @@
           location: location,
           reputation: u0,
           total-shared: u0,
-          is-active: true
+          is-active: true,
+          last-updated: block-height
         })
         (var-set total-nodes (+ (var-get total-nodes) u1))
         (ok true))
@@ -42,9 +45,24 @@
       (begin 
         (map-set nodes node 
           (merge (unwrap-panic (map-get? nodes node))
-            { is-active: false }))
+            { is-active: false,
+              last-updated: block-height }))
         (ok true))
       err-not-registered)))
+
+(define-public (update-reputation (address principal) (delta int))
+  (let ((node { node-address: address })
+        (current-node (unwrap! (map-get? nodes node) err-not-registered))
+        (new-rep (to-uint (+ (to-int (get reputation current-node)) delta))))
+    (if (> new-rep u100)
+      err-invalid-reputation
+      (begin
+        (map-set nodes node
+          (merge current-node { 
+            reputation: new-rep,
+            last-updated: block-height
+          }))
+        (ok true)))))
 
 ;; Read only functions
 (define-read-only (get-node (address principal))
